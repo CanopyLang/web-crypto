@@ -1,0 +1,360 @@
+module Crypto.Key exposing
+    ( KeyFormat(..)
+    , JsonWebKey
+    , Pbkdf2Config
+    , HkdfConfig
+    , exportAes
+    , exportAesJwk
+    , exportRsaPublic
+    , exportRsaPublicJwk
+    , exportRsaPrivate
+    , exportRsaPrivateJwk
+    , exportEcdsaPublic
+    , exportEcdsaPublicJwk
+    , exportEcdsaPrivate
+    , exportEcdsaPrivateJwk
+    , importAes
+    , importAesJwk
+    , importRsaPublic
+    , importRsaPublicJwk
+    , importRsaPrivate
+    , importRsaPrivateJwk
+    , importEcdsaPublic
+    , importEcdsaPublicJwk
+    , importEcdsaPrivate
+    , importEcdsaPrivateJwk
+    , importRsaSigningPublic
+    , importRsaSigningPrivate
+    , deriveKeyPbkdf2
+    , deriveBitsPbkdf2
+    , deriveKeyHkdf
+    , deriveBitsHkdf
+    , keyFormatToString
+    , defaultPbkdf2Config
+    , defaultHkdfConfig
+    )
+
+
+{-| Key management for the Web Crypto API.
+
+Key generation, import/export in raw, PKCS8, SPKI, and JWK formats,
+and password-based key derivation (PBKDF2, HKDF).
+
+# Formats
+@docs KeyFormat, JsonWebKey, keyFormatToString
+
+# Export
+@docs exportAes, exportAesJwk
+@docs exportRsaPublic, exportRsaPublicJwk, exportRsaPrivate, exportRsaPrivateJwk
+@docs exportEcdsaPublic, exportEcdsaPublicJwk, exportEcdsaPrivate, exportEcdsaPrivateJwk
+
+# Import
+@docs importAes, importAesJwk
+@docs importRsaPublic, importRsaPublicJwk, importRsaPrivate, importRsaPrivateJwk
+@docs importEcdsaPublic, importEcdsaPublicJwk, importEcdsaPrivate, importEcdsaPrivateJwk
+@docs importRsaSigningPublic, importRsaSigningPrivate
+
+# PBKDF2 Key Derivation
+@docs Pbkdf2Config, defaultPbkdf2Config, deriveKeyPbkdf2, deriveBitsPbkdf2
+
+# HKDF Key Derivation
+@docs HkdfConfig, defaultHkdfConfig, deriveKeyHkdf, deriveBitsHkdf
+-}
+
+
+import Bytes exposing (Bytes)
+import Crypto exposing (Error)
+import Crypto.Encrypt exposing (AesAlgorithm, AesKey, RsaPublicKey, RsaPrivateKey)
+import Crypto.Hash exposing (HashAlgorithm(..))
+import Crypto.Sign exposing (EcCurve, EcdsaPublicKey, EcdsaPrivateKey, RsaSignAlgorithm, RsaSigningPublicKey, RsaSigningPrivateKey)
+import Json.Decode
+import Task exposing (Task)
+
+foreign import javascript "external/crypto.js" as CryptoFFI
+
+
+{-| Key export formats.
+
+  - `Raw`: Raw key bytes (symmetric keys, EC public keys).
+  - `Pkcs8`: PKCS#8 format (private keys).
+  - `Spki`: SubjectPublicKeyInfo format (public keys).
+  - `Jwk`: JSON Web Key format (all key types).
+-}
+type KeyFormat
+    = Raw
+    | Pkcs8
+    | Spki
+    | Jwk
+
+
+{-| A JWK (JSON Web Key) representation.
+Stored as a Json.Decode.Value because JWK structure varies by algorithm.
+-}
+type alias JsonWebKey =
+    Json.Decode.Value
+
+
+{-| PBKDF2 configuration for password-based key derivation.
+
+  - `hash`: The hash algorithm (SHA-256 recommended).
+  - `salt`: Random salt bytes (use Crypto.randomBytes to generate).
+  - `iterations`: Number of iterations (600000 recommended for SHA-256).
+  - `keyLength`: Desired key length in bits (128, 192, or 256).
+-}
+type alias Pbkdf2Config =
+    { hash : HashAlgorithm
+    , salt : Bytes
+    , iterations : Int
+    , keyLength : Int
+    }
+
+
+{-| HKDF configuration for key derivation from high-entropy input.
+
+  - `hash`: The hash algorithm.
+  - `salt`: Optional salt (can be empty).
+  - `info`: Context and application-specific information.
+  - `keyLength`: Desired key length in bits.
+-}
+type alias HkdfConfig =
+    { hash : HashAlgorithm
+    , salt : Bytes
+    , info : Bytes
+    , keyLength : Int
+    }
+
+
+-- EXPORT
+
+
+{-| Export an AES key in the specified format.
+Raw format exports the key bytes directly. -}
+exportAes : KeyFormat -> AesKey -> Task Error Bytes
+exportAes fmt key =
+    CryptoFFI.exportKeyBytes fmt key
+
+
+{-| Export an AES key as JWK. -}
+exportAesJwk : AesKey -> Task Error JsonWebKey
+exportAesJwk key =
+    CryptoFFI.exportKeyJwk key
+
+
+{-| Export an RSA public key in SPKI format. -}
+exportRsaPublic : RsaPublicKey -> Task Error Bytes
+exportRsaPublic key =
+    CryptoFFI.exportKeyBytes Spki key
+
+
+{-| Export an RSA public key as JWK. -}
+exportRsaPublicJwk : RsaPublicKey -> Task Error JsonWebKey
+exportRsaPublicJwk key =
+    CryptoFFI.exportKeyJwk key
+
+
+{-| Export an RSA private key in PKCS8 format. -}
+exportRsaPrivate : RsaPrivateKey -> Task Error Bytes
+exportRsaPrivate key =
+    CryptoFFI.exportKeyBytes Pkcs8 key
+
+
+{-| Export an RSA private key as JWK. -}
+exportRsaPrivateJwk : RsaPrivateKey -> Task Error JsonWebKey
+exportRsaPrivateJwk key =
+    CryptoFFI.exportKeyJwk key
+
+
+{-| Export an ECDSA public key in SPKI format. -}
+exportEcdsaPublic : EcdsaPublicKey -> Task Error Bytes
+exportEcdsaPublic key =
+    CryptoFFI.exportKeyBytes Spki key
+
+
+{-| Export an ECDSA public key as JWK. -}
+exportEcdsaPublicJwk : EcdsaPublicKey -> Task Error JsonWebKey
+exportEcdsaPublicJwk key =
+    CryptoFFI.exportKeyJwk key
+
+
+{-| Export an ECDSA private key in PKCS8 format. -}
+exportEcdsaPrivate : EcdsaPrivateKey -> Task Error Bytes
+exportEcdsaPrivate key =
+    CryptoFFI.exportKeyBytes Pkcs8 key
+
+
+{-| Export an ECDSA private key as JWK. -}
+exportEcdsaPrivateJwk : EcdsaPrivateKey -> Task Error JsonWebKey
+exportEcdsaPrivateJwk key =
+    CryptoFFI.exportKeyJwk key
+
+
+-- IMPORT
+
+
+{-| Import an AES key from raw bytes.
+
+    Crypto.Key.importAes AesGcm keyBytes
+-}
+importAes : AesAlgorithm -> Bytes -> Task Error AesKey
+importAes =
+    CryptoFFI.importAesRaw
+
+
+{-| Import an AES key from JWK. -}
+importAesJwk : AesAlgorithm -> JsonWebKey -> Task Error AesKey
+importAesJwk =
+    CryptoFFI.importAesJwk
+
+
+{-| Import an RSA-OAEP public key from SPKI format. -}
+importRsaPublic : HashAlgorithm -> Bytes -> Task Error RsaPublicKey
+importRsaPublic =
+    CryptoFFI.importRsaPublicSpki
+
+
+{-| Import an RSA-OAEP public key from JWK. -}
+importRsaPublicJwk : HashAlgorithm -> JsonWebKey -> Task Error RsaPublicKey
+importRsaPublicJwk =
+    CryptoFFI.importRsaPublicJwk
+
+
+{-| Import an RSA-OAEP private key from PKCS8 format. -}
+importRsaPrivate : HashAlgorithm -> Bytes -> Task Error RsaPrivateKey
+importRsaPrivate =
+    CryptoFFI.importRsaPrivatePkcs8
+
+
+{-| Import an RSA-OAEP private key from JWK. -}
+importRsaPrivateJwk : HashAlgorithm -> JsonWebKey -> Task Error RsaPrivateKey
+importRsaPrivateJwk =
+    CryptoFFI.importRsaPrivateJwk
+
+
+{-| Import an ECDSA public key from SPKI format. -}
+importEcdsaPublic : EcCurve -> Bytes -> Task Error EcdsaPublicKey
+importEcdsaPublic =
+    CryptoFFI.importEcdsaPublicSpki
+
+
+{-| Import an ECDSA public key from JWK. -}
+importEcdsaPublicJwk : EcCurve -> JsonWebKey -> Task Error EcdsaPublicKey
+importEcdsaPublicJwk =
+    CryptoFFI.importEcdsaPublicJwk
+
+
+{-| Import an ECDSA private key from PKCS8 format. -}
+importEcdsaPrivate : EcCurve -> Bytes -> Task Error EcdsaPrivateKey
+importEcdsaPrivate =
+    CryptoFFI.importEcdsaPrivatePkcs8
+
+
+{-| Import an ECDSA private key from JWK. -}
+importEcdsaPrivateJwk : EcCurve -> JsonWebKey -> Task Error EcdsaPrivateKey
+importEcdsaPrivateJwk =
+    CryptoFFI.importEcdsaPrivateJwk
+
+
+{-| Import an RSA signing public key from SPKI format. -}
+importRsaSigningPublic : RsaSignAlgorithm -> HashAlgorithm -> Bytes -> Task Error RsaSigningPublicKey
+importRsaSigningPublic =
+    CryptoFFI.importRsaSigningPublicSpki
+
+
+{-| Import an RSA signing private key from PKCS8 format. -}
+importRsaSigningPrivate : RsaSignAlgorithm -> HashAlgorithm -> Bytes -> Task Error RsaSigningPrivateKey
+importRsaSigningPrivate =
+    CryptoFFI.importRsaSigningPrivatePkcs8
+
+
+-- KEY DERIVATION
+
+
+{-| Derive an AES key from a password using PBKDF2.
+The password is a UTF-8 string. The salt should be random
+(use Crypto.randomBytes to generate one).
+
+    Crypto.Key.deriveKeyPbkdf2
+        { hash = SHA256
+        , salt = saltBytes
+        , iterations = 600000
+        , keyLength = 256
+        }
+        "user-password"
+        AesGcm
+-}
+deriveKeyPbkdf2 : Pbkdf2Config -> String -> AesAlgorithm -> Task Error AesKey
+deriveKeyPbkdf2 config password aesAlgo =
+    CryptoFFI.deriveKeyPbkdf2Wrapped config.hash config.salt config.iterations config.keyLength password aesAlgo
+
+
+{-| Derive raw bits from a password using PBKDF2.
+Returns the specified number of bytes. -}
+deriveBitsPbkdf2 : Pbkdf2Config -> String -> Task Error Bytes
+deriveBitsPbkdf2 config password =
+    CryptoFFI.deriveBitsPbkdf2 config.hash config.salt config.iterations config.keyLength password
+
+
+{-| Derive an AES key from high-entropy input using HKDF.
+Use this when the input key material is already high-entropy
+(e.g., output of ECDH key agreement). For passwords, use PBKDF2.
+
+    Crypto.Key.deriveKeyHkdf
+        { hash = SHA256
+        , salt = saltBytes
+        , info = contextBytes
+        , keyLength = 256
+        }
+        inputKeyMaterial
+        AesGcm
+-}
+deriveKeyHkdf : HkdfConfig -> Bytes -> AesAlgorithm -> Task Error AesKey
+deriveKeyHkdf config ikm aesAlgo =
+    CryptoFFI.deriveKeyHkdf config.hash config.salt config.info config.keyLength ikm aesAlgo
+
+
+{-| Derive raw bits from high-entropy input using HKDF. -}
+deriveBitsHkdf : HkdfConfig -> Bytes -> Task Error Bytes
+deriveBitsHkdf config ikm =
+    CryptoFFI.deriveBitsHkdf config.hash config.salt config.info config.keyLength ikm
+
+
+{-| Convert a key format to its human-readable name.
+
+    keyFormatToString Raw == "raw"
+-}
+keyFormatToString : KeyFormat -> String
+keyFormatToString fmt =
+    case fmt of
+        Raw ->
+            "raw"
+
+        Pkcs8 ->
+            "pkcs8"
+
+        Spki ->
+            "spki"
+
+        Jwk ->
+            "jwk"
+
+
+{-| Default PBKDF2 configuration with SHA-256, 600000 iterations, and 256-bit key.
+You must provide your own salt (use Crypto.randomBytes 16). -}
+defaultPbkdf2Config : Bytes -> Pbkdf2Config
+defaultPbkdf2Config salt =
+    { hash = SHA256
+    , salt = salt
+    , iterations = 600000
+    , keyLength = 256
+    }
+
+
+{-| Default HKDF configuration with SHA-256 and 256-bit key.
+You must provide your own salt and info. -}
+defaultHkdfConfig : Bytes -> Bytes -> HkdfConfig
+defaultHkdfConfig salt info =
+    { hash = SHA256
+    , salt = salt
+    , info = info
+    , keyLength = 256
+    }

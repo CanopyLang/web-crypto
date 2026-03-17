@@ -1,0 +1,200 @@
+module Test.Crypto exposing (main, tests)
+
+import Crypto exposing (Error(..))
+import Crypto.Hash as Hash exposing (HashAlgorithm(..))
+import Crypto.Encrypt as Encrypt exposing (AesAlgorithm(..), AesKeyLength(..), RsaKeyLength(..))
+import Crypto.Sign as Sign exposing (EcCurve(..), RsaSignAlgorithm(..))
+import Crypto.Key as Key exposing (KeyFormat(..))
+import Expect
+import Test exposing (..)
+
+
+main : Test
+main =
+    tests
+
+
+tests : Test
+tests =
+    describe "Crypto"
+        [ errorToStringTests
+        , hashAlgorithmToStringTests
+        , aesAlgorithmToStringTests
+        , aesKeyLengthBitsTests
+        , rsaKeyLengthBitsTests
+        , ecCurveToStringTests
+        , rsaSignAlgorithmToStringTests
+        , keyFormatToStringTests
+        ]
+
+
+errorToStringTests : Test
+errorToStringTests =
+    describe "errorToString"
+        [ test "OperationFailed includes message" <|
+            \() ->
+                Crypto.errorToString (OperationFailed "digest failed")
+                    |> Expect.equal "Operation failed: digest failed"
+        , test "OperationFailed with empty message" <|
+            \() ->
+                Crypto.errorToString (OperationFailed "")
+                    |> Expect.equal "Operation failed: "
+        , test "InvalidKey includes message" <|
+            \() ->
+                Crypto.errorToString (InvalidKey "wrong format")
+                    |> Expect.equal "Invalid key: wrong format"
+        , test "InvalidKey with empty message" <|
+            \() ->
+                Crypto.errorToString (InvalidKey "")
+                    |> Expect.equal "Invalid key: "
+        , test "InvalidData includes message" <|
+            \() ->
+                Crypto.errorToString (InvalidData "corrupt ciphertext")
+                    |> Expect.equal "Invalid data: corrupt ciphertext"
+        , test "InvalidData with empty message" <|
+            \() ->
+                Crypto.errorToString (InvalidData "")
+                    |> Expect.equal "Invalid data: "
+        , test "NotSupported includes message" <|
+            \() ->
+                Crypto.errorToString (NotSupported "AES-XTS")
+                    |> Expect.equal "Not supported: AES-XTS"
+        , test "NotSupported with empty message" <|
+            \() ->
+                Crypto.errorToString (NotSupported "")
+                    |> Expect.equal "Not supported: "
+        , test "OperationFailed preserves special characters" <|
+            \() ->
+                Crypto.errorToString (OperationFailed "error: code=42")
+                    |> Expect.equal "Operation failed: error: code=42"
+        , test "InvalidKey preserves multiword message" <|
+            \() ->
+                Crypto.errorToString (InvalidKey "key too short for AES-256")
+                    |> Expect.equal "Invalid key: key too short for AES-256"
+        ]
+
+
+hashAlgorithmToStringTests : Test
+hashAlgorithmToStringTests =
+    describe "Hash.hashAlgorithmToString"
+        [ test "SHA1" <|
+            \() ->
+                Hash.hashAlgorithmToString SHA1
+                    |> Expect.equal "SHA-1"
+        , test "SHA256" <|
+            \() ->
+                Hash.hashAlgorithmToString SHA256
+                    |> Expect.equal "SHA-256"
+        , test "SHA384" <|
+            \() ->
+                Hash.hashAlgorithmToString SHA384
+                    |> Expect.equal "SHA-384"
+        , test "SHA512" <|
+            \() ->
+                Hash.hashAlgorithmToString SHA512
+                    |> Expect.equal "SHA-512"
+        ]
+
+
+aesAlgorithmToStringTests : Test
+aesAlgorithmToStringTests =
+    describe "Encrypt.aesAlgorithmToString"
+        [ test "AesGcm" <|
+            \() ->
+                Encrypt.aesAlgorithmToString AesGcm
+                    |> Expect.equal "AES-GCM"
+        , test "AesCbc" <|
+            \() ->
+                Encrypt.aesAlgorithmToString AesCbc
+                    |> Expect.equal "AES-CBC"
+        , test "AesCtr" <|
+            \() ->
+                Encrypt.aesAlgorithmToString AesCtr
+                    |> Expect.equal "AES-CTR"
+        ]
+
+
+aesKeyLengthBitsTests : Test
+aesKeyLengthBitsTests =
+    describe "Encrypt.aesKeyLengthBits"
+        [ test "Aes128 is 128 bits" <|
+            \() ->
+                Encrypt.aesKeyLengthBits Aes128
+                    |> Expect.equal 128
+        , test "Aes192 is 192 bits" <|
+            \() ->
+                Encrypt.aesKeyLengthBits Aes192
+                    |> Expect.equal 192
+        , test "Aes256 is 256 bits" <|
+            \() ->
+                Encrypt.aesKeyLengthBits Aes256
+                    |> Expect.equal 256
+        ]
+
+
+rsaKeyLengthBitsTests : Test
+rsaKeyLengthBitsTests =
+    describe "Encrypt.rsaKeyLengthBits"
+        [ test "Rsa2048 is 2048 bits" <|
+            \() ->
+                Encrypt.rsaKeyLengthBits Rsa2048
+                    |> Expect.equal 2048
+        , test "Rsa4096 is 4096 bits" <|
+            \() ->
+                Encrypt.rsaKeyLengthBits Rsa4096
+                    |> Expect.equal 4096
+        ]
+
+
+ecCurveToStringTests : Test
+ecCurveToStringTests =
+    describe "Sign.ecCurveToString"
+        [ test "P256" <|
+            \() ->
+                Sign.ecCurveToString P256
+                    |> Expect.equal "P-256"
+        , test "P384" <|
+            \() ->
+                Sign.ecCurveToString P384
+                    |> Expect.equal "P-384"
+        , test "P521" <|
+            \() ->
+                Sign.ecCurveToString P521
+                    |> Expect.equal "P-521"
+        ]
+
+
+rsaSignAlgorithmToStringTests : Test
+rsaSignAlgorithmToStringTests =
+    describe "Sign.rsaSignAlgorithmToString"
+        [ test "RsaPss" <|
+            \() ->
+                Sign.rsaSignAlgorithmToString RsaPss
+                    |> Expect.equal "RSA-PSS"
+        , test "RsaPkcs1" <|
+            \() ->
+                Sign.rsaSignAlgorithmToString RsaPkcs1
+                    |> Expect.equal "RSASSA-PKCS1-v1_5"
+        ]
+
+
+keyFormatToStringTests : Test
+keyFormatToStringTests =
+    describe "Key.keyFormatToString"
+        [ test "Raw" <|
+            \() ->
+                Key.keyFormatToString Raw
+                    |> Expect.equal "raw"
+        , test "Pkcs8" <|
+            \() ->
+                Key.keyFormatToString Pkcs8
+                    |> Expect.equal "pkcs8"
+        , test "Spki" <|
+            \() ->
+                Key.keyFormatToString Spki
+                    |> Expect.equal "spki"
+        , test "Jwk" <|
+            \() ->
+                Key.keyFormatToString Jwk
+                    |> Expect.equal "jwk"
+        ]

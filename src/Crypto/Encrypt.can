@@ -1,0 +1,365 @@
+module Crypto.Encrypt exposing
+    ( AesKeyLength(..)
+    , AesAlgorithm(..)
+    , AesKey
+    , EncryptedData
+    , RsaKeyLength(..)
+    , RsaKeyPair
+    , RsaPublicKey
+    , RsaPrivateKey
+    , PasswordEncryptedData
+    , generateAesKey
+    , importAesKey
+    , exportAesKey
+    , encryptAesGcm
+    , decryptAesGcm
+    , encryptAesCbc
+    , decryptAesCbc
+    , encryptAesCtr
+    , decryptAesCtr
+    , generateRsaKeyPair
+    , generateRsaKeyPairWith
+    , encryptRsa
+    , decryptRsa
+    , encryptString
+    , decryptString
+    , encryptWithPassword
+    , decryptWithPassword
+    , aesKeyLengthBits
+    , aesAlgorithmToString
+    , rsaKeyLengthBits
+    )
+
+
+{-| Symmetric and asymmetric encryption using the Web Crypto API.
+
+Provides AES-GCM (recommended), AES-CBC, AES-CTR for symmetric encryption
+and RSA-OAEP for asymmetric encryption.
+
+# AES Types
+@docs AesKeyLength, AesAlgorithm, AesKey, EncryptedData
+
+# AES Key Management
+@docs generateAesKey, importAesKey, exportAesKey
+
+# AES-GCM (Recommended)
+@docs encryptAesGcm, decryptAesGcm
+
+# AES-CBC
+@docs encryptAesCbc, decryptAesCbc
+
+# AES-CTR
+@docs encryptAesCtr, decryptAesCtr
+
+# RSA Types
+@docs RsaKeyLength, RsaKeyPair, RsaPublicKey, RsaPrivateKey
+
+# RSA-OAEP
+@docs generateRsaKeyPair, generateRsaKeyPairWith, encryptRsa, decryptRsa
+
+# Convenience
+@docs encryptString, decryptString, encryptWithPassword, decryptWithPassword
+@docs PasswordEncryptedData
+
+# Helpers
+@docs aesKeyLengthBits, aesAlgorithmToString, rsaKeyLengthBits
+-}
+
+
+import Bytes exposing (Bytes)
+import Crypto exposing (Error)
+import Crypto.Hash exposing (HashAlgorithm(..))
+import Task exposing (Task)
+
+foreign import javascript "external/crypto.js" as CryptoFFI
+
+
+{-| AES key lengths. -}
+type AesKeyLength
+    = Aes128
+    | Aes192
+    | Aes256
+
+
+{-| AES encryption algorithms. -}
+type AesAlgorithm
+    = AesGcm
+    | AesCbc
+    | AesCtr
+
+
+{-| An AES key for symmetric encryption. Opaque type wrapping a CryptoKey. -}
+type AesKey
+    = AesKey
+
+
+{-| Encrypted data with metadata needed for decryption.
+
+  - `ciphertext`: The encrypted content.
+  - `iv`: The initialization vector used during encryption.
+  - `tag`: The authentication tag (present for AES-GCM, Nothing for others).
+-}
+type alias EncryptedData =
+    { ciphertext : Bytes
+    , iv : Bytes
+    , tag : Maybe Bytes
+    }
+
+
+{-| RSA key lengths. -}
+type RsaKeyLength
+    = Rsa2048
+    | Rsa4096
+
+
+{-| An RSA-OAEP key pair for asymmetric encryption. -}
+type alias RsaKeyPair =
+    { publicKey : RsaPublicKey
+    , privateKey : RsaPrivateKey
+    }
+
+
+{-| RSA public key (for encryption). Opaque type wrapping a CryptoKey. -}
+type RsaPublicKey
+    = RsaPublicKey
+
+
+{-| RSA private key (for decryption). Opaque type wrapping a CryptoKey. -}
+type RsaPrivateKey
+    = RsaPrivateKey
+
+
+{-| Encrypted data that includes the PBKDF2 salt for password-based encryption.
+
+  - `ciphertext`: The encrypted content.
+  - `iv`: The initialization vector.
+  - `salt`: The PBKDF2 salt (16 bytes).
+  - `iterations`: The number of PBKDF2 iterations used.
+-}
+type alias PasswordEncryptedData =
+    { ciphertext : Bytes
+    , iv : Bytes
+    , salt : Bytes
+    , iterations : Int
+    }
+
+
+{-| Generate a new AES key.
+
+    Crypto.Encrypt.generateAesKey AesGcm Aes256
+-}
+generateAesKey : AesAlgorithm -> AesKeyLength -> Task Error AesKey
+generateAesKey =
+    CryptoFFI.generateAesKey
+
+
+{-| Import an AES key from raw bytes.
+
+    Crypto.Encrypt.importAesKey AesGcm keyBytes
+-}
+importAesKey : AesAlgorithm -> Bytes -> Task Error AesKey
+importAesKey =
+    CryptoFFI.importAesKeyRaw
+
+
+{-| Export an AES key to raw bytes. -}
+exportAesKey : AesKey -> Task Error Bytes
+exportAesKey =
+    CryptoFFI.exportAesKeyRaw
+
+
+{-| Encrypt data with AES-GCM (recommended).
+Automatically generates a random 12-byte IV. Includes authentication tag.
+Optional additionalData for authenticated associated data (AAD).
+
+    Crypto.Encrypt.encryptAesGcm aesKey plaintextBytes Nothing
+-}
+encryptAesGcm : AesKey -> Bytes -> Maybe Bytes -> Task Error EncryptedData
+encryptAesGcm =
+    CryptoFFI.encryptAesGcm
+
+
+{-| Decrypt data with AES-GCM.
+The EncryptedData must include the IV and tag from encryption.
+
+    Crypto.Encrypt.decryptAesGcm aesKey encryptedData Nothing
+-}
+decryptAesGcm : AesKey -> EncryptedData -> Maybe Bytes -> Task Error Bytes
+decryptAesGcm =
+    CryptoFFI.decryptAesGcm
+
+
+{-| Encrypt data with AES-CBC. Automatically generates a random 16-byte IV. -}
+encryptAesCbc : AesKey -> Bytes -> Task Error EncryptedData
+encryptAesCbc =
+    CryptoFFI.encryptAesCbc
+
+
+{-| Decrypt data with AES-CBC. -}
+decryptAesCbc : AesKey -> EncryptedData -> Task Error Bytes
+decryptAesCbc =
+    CryptoFFI.decryptAesCbc
+
+
+{-| Encrypt data with AES-CTR. Automatically generates a random counter block. -}
+encryptAesCtr : AesKey -> Bytes -> Task Error EncryptedData
+encryptAesCtr =
+    CryptoFFI.encryptAesCtr
+
+
+{-| Decrypt data with AES-CTR. -}
+decryptAesCtr : AesKey -> EncryptedData -> Task Error Bytes
+decryptAesCtr =
+    CryptoFFI.decryptAesCtr
+
+
+{-| Generate an RSA-OAEP key pair with SHA-256 for the OAEP hash.
+
+    Crypto.Encrypt.generateRsaKeyPair Rsa2048
+-}
+generateRsaKeyPair : RsaKeyLength -> Task Error RsaKeyPair
+generateRsaKeyPair keyLen =
+    CryptoFFI.generateRsaKeyPairWith keyLen SHA256
+
+
+{-| Generate an RSA-OAEP key pair with a specific hash algorithm.
+
+    Crypto.Encrypt.generateRsaKeyPairWith Rsa4096 Crypto.Hash.SHA512
+-}
+generateRsaKeyPairWith : RsaKeyLength -> HashAlgorithm -> Task Error RsaKeyPair
+generateRsaKeyPairWith =
+    CryptoFFI.generateRsaKeyPairWith
+
+
+{-| Encrypt data with an RSA-OAEP public key.
+RSA can only encrypt small amounts of data (key size - overhead).
+For large data, encrypt with AES, then encrypt the AES key with RSA.
+
+    Crypto.Encrypt.encryptRsa publicKey plaintextBytes
+-}
+encryptRsa : RsaPublicKey -> Bytes -> Task Error Bytes
+encryptRsa =
+    CryptoFFI.encryptRsa
+
+
+{-| Decrypt data with an RSA-OAEP private key. -}
+decryptRsa : RsaPrivateKey -> Bytes -> Task Error Bytes
+decryptRsa =
+    CryptoFFI.decryptRsa
+
+
+{-| Encrypt a UTF-8 string with AES-GCM.
+Returns the encrypted data with IV included. -}
+encryptString : AesKey -> String -> Task Error EncryptedData
+encryptString key str =
+    encryptAesGcm key (CryptoFFI.stringToBytes str) Nothing
+
+
+{-| Decrypt AES-GCM ciphertext to a UTF-8 string. -}
+decryptString : AesKey -> EncryptedData -> Task Error String
+decryptString key encData =
+    decryptAesGcm key encData Nothing
+        |> Task.andThen (\bytes -> resultToTask (CryptoFFI.bytesToString bytes))
+
+
+{-| Encrypt data with a password using PBKDF2 key derivation and AES-GCM.
+Automatically derives an AES-256 key from the password with a random 16-byte
+salt and 600000 iterations (OWASP 2023 recommendation).
+
+    Crypto.Encrypt.encryptWithPassword "my-password" plaintextBytes
+-}
+encryptWithPassword : String -> Bytes -> Task Error PasswordEncryptedData
+encryptWithPassword password plaintext =
+    let
+        iterations =
+            600000
+    in
+    Crypto.randomBytes 16
+        |> Task.andThen (\salt ->
+            CryptoFFI.deriveKeyPbkdf2Wrapped SHA256 salt iterations 256 password AesGcm
+                |> Task.andThen (\key ->
+                    encryptAesGcm key plaintext Nothing
+                        |> Task.map (\encData ->
+                            { ciphertext = encData.ciphertext
+                            , iv = encData.iv
+                            , salt = salt
+                            , iterations = iterations
+                            }
+                        )
+                )
+        )
+
+
+{-| Decrypt data that was encrypted with a password.
+
+    Crypto.Encrypt.decryptWithPassword "my-password" passwordEncryptedData
+-}
+decryptWithPassword : String -> PasswordEncryptedData -> Task Error Bytes
+decryptWithPassword password encData =
+    CryptoFFI.deriveKeyPbkdf2Wrapped SHA256 encData.salt encData.iterations 256 password AesGcm
+        |> Task.andThen (\key ->
+            decryptAesGcm key
+                { ciphertext = encData.ciphertext
+                , iv = encData.iv
+                , tag = Nothing
+                }
+                Nothing
+        )
+
+
+{-| Get the bit count for an AES key length.
+
+    aesKeyLengthBits Aes256 == 256
+-}
+aesKeyLengthBits : AesKeyLength -> Int
+aesKeyLengthBits keyLen =
+    case keyLen of
+        Aes128 ->
+            128
+
+        Aes192 ->
+            192
+
+        Aes256 ->
+            256
+
+
+{-| Convert an AES algorithm to its human-readable name.
+
+    aesAlgorithmToString AesGcm == "AES-GCM"
+-}
+aesAlgorithmToString : AesAlgorithm -> String
+aesAlgorithmToString algo =
+    case algo of
+        AesGcm ->
+            "AES-GCM"
+
+        AesCbc ->
+            "AES-CBC"
+
+        AesCtr ->
+            "AES-CTR"
+
+
+{-| Get the bit count for an RSA key length.
+
+    rsaKeyLengthBits Rsa2048 == 2048
+-}
+rsaKeyLengthBits : RsaKeyLength -> Int
+rsaKeyLengthBits keyLen =
+    case keyLen of
+        Rsa2048 ->
+            2048
+
+        Rsa4096 ->
+            4096
+
+
+resultToTask : Result Error a -> Task Error a
+resultToTask result =
+    case result of
+        Ok value ->
+            Task.succeed value
+
+        Err err ->
+            Task.fail err

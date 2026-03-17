@@ -1,0 +1,100 @@
+module Crypto exposing
+    ( Error(..)
+    , randomBytes
+    , randomUUID
+    , isAvailable
+    , errorToString
+    )
+
+
+{-| Cryptographically secure random value generation and top-level error types
+for the Web Crypto API.
+
+The Web Crypto API is only available in secure contexts (HTTPS or localhost).
+Use `isAvailable` to check before performing operations.
+
+# Errors
+@docs Error, errorToString
+
+# Random
+@docs randomBytes, randomUUID
+
+# Availability
+@docs isAvailable
+-}
+
+
+import Bytes exposing (Bytes)
+import Capability exposing (Available(..))
+import Task exposing (Task)
+
+foreign import javascript "external/crypto.js" as CryptoFFI
+
+
+{-| Errors that can occur in cryptographic operations.
+
+  - `OperationFailed`: A crypto operation failed (algorithm error, internal error).
+  - `InvalidKey`: The provided key is invalid for the requested operation.
+  - `InvalidData`: The provided data is invalid (e.g., corrupt ciphertext).
+  - `NotSupported`: The requested algorithm or feature is not supported.
+-}
+type Error
+    = OperationFailed String
+    | InvalidKey String
+    | InvalidData String
+    | NotSupported String
+
+
+{-| Generate cryptographically secure random bytes.
+The Int argument specifies the number of bytes to generate.
+
+    Crypto.randomBytes 32
+        |> Task.map Bytes.toHex
+-}
+randomBytes : Int -> Task Error Bytes
+randomBytes =
+    CryptoFFI.randomBytes
+
+
+{-| Generate a cryptographically secure random UUID (v4).
+
+    Crypto.randomUUID
+        |> Task.map (\uuid -> "New ID: " ++ uuid)
+-}
+randomUUID : Task Error String
+randomUUID =
+    CryptoFFI.randomUUID
+
+
+{-| Check whether the Web Crypto API is available.
+
+Returns an Available value indicating the level of support.
+Returns Unsupported in insecure contexts (non-HTTPS, except localhost).
+
+    Crypto.isAvailable
+        |> Task.perform GotAvailability
+-}
+isAvailable : Task Never Available
+isAvailable =
+    CryptoFFI.isAvailable
+
+
+{-| Convert a crypto error to a human-readable string.
+
+    errorToString (OperationFailed "digest failed")
+        == "Operation failed: digest failed"
+-}
+errorToString : Error -> String
+errorToString error =
+    case error of
+        OperationFailed msg ->
+            "Operation failed: " ++ msg
+
+        InvalidKey msg ->
+            "Invalid key: " ++ msg
+
+        InvalidData msg ->
+            "Invalid data: " ++ msg
+
+        NotSupported msg ->
+            "Not supported: " ++ msg

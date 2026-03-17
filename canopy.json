@@ -1,0 +1,25 @@
+{
+    "type": "package",
+    "name": "canopy/web-crypto",
+    "summary": "Web Crypto API bindings for hashing, encryption, signatures, and secure random values",
+    "license": "BSD-3-Clause",
+    "version": "2.0.0",
+    "exposed-modules": [
+        "Crypto",
+        "Crypto.Hash",
+        "Crypto.Hmac",
+        "Crypto.Encrypt",
+        "Crypto.Sign",
+        "Crypto.Key"
+    ],
+    "canopy-version": "0.19.0 <= v < 0.20.0",
+    "dependencies": {
+        "canopy/core": "1.0.0 <= v < 2.0.0",
+        "canopy/bytes": "1.0.0 <= v < 2.0.0",
+        "canopy/json": "1.0.0 <= v < 2.0.0",
+        "canopy/capability": "2.0.0 <= v < 3.0.0"
+    },
+    "test-dependencies": {
+        "canopy/test": "1.0.0 <= v < 3.0.0"
+    }
+}

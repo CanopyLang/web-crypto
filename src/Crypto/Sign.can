@@ -1,0 +1,213 @@
+module Crypto.Sign exposing
+    ( EcCurve(..)
+    , EcdsaKeyPair
+    , EcdsaPublicKey
+    , EcdsaPrivateKey
+    , RsaSigningKeyPair
+    , RsaSigningPublicKey
+    , RsaSigningPrivateKey
+    , RsaSignAlgorithm(..)
+    , generateEcdsaKeyPair
+    , generateRsaSigningKeyPair
+    , signEcdsa
+    , verifyEcdsa
+    , signRsaPss
+    , verifyRsaPss
+    , signRsaPkcs1
+    , verifyRsaPkcs1
+    , signString
+    , verifyString
+    , ecCurveToString
+    , rsaSignAlgorithmToString
+    )
+
+
+{-| Digital signatures using the Web Crypto API.
+
+Supports ECDSA (recommended for new applications), RSA-PSS, and
+RSASSA-PKCS1-v1_5 for digital signatures.
+
+# ECDSA Types
+@docs EcCurve, EcdsaKeyPair, EcdsaPublicKey, EcdsaPrivateKey
+
+# ECDSA Operations
+@docs generateEcdsaKeyPair, signEcdsa, verifyEcdsa
+
+# RSA Signing Types
+@docs RsaSignAlgorithm, RsaSigningKeyPair, RsaSigningPublicKey, RsaSigningPrivateKey
+
+# RSA Signing Operations
+@docs generateRsaSigningKeyPair, signRsaPss, verifyRsaPss, signRsaPkcs1, verifyRsaPkcs1
+
+# Convenience
+@docs signString, verifyString
+
+# Helpers
+@docs ecCurveToString, rsaSignAlgorithmToString
+-}
+
+
+import Bytes exposing (Bytes)
+import Crypto exposing (Error)
+import Crypto.Encrypt exposing (RsaKeyLength)
+import Crypto.Hash exposing (HashAlgorithm)
+import Task exposing (Task)
+
+foreign import javascript "external/crypto.js" as CryptoFFI
+
+
+{-| ECDSA elliptic curve options. -}
+type EcCurve
+    = P256
+    | P384
+    | P521
+
+
+{-| An ECDSA key pair for digital signatures. -}
+type alias EcdsaKeyPair =
+    { publicKey : EcdsaPublicKey
+    , privateKey : EcdsaPrivateKey
+    }
+
+
+{-| ECDSA public key (for verification). Opaque type wrapping a CryptoKey. -}
+type EcdsaPublicKey
+    = EcdsaPublicKey
+
+
+{-| ECDSA private key (for signing). Opaque type wrapping a CryptoKey. -}
+type EcdsaPrivateKey
+    = EcdsaPrivateKey
+
+
+{-| An RSA signing key pair (RSA-PSS or RSASSA-PKCS1-v1_5). -}
+type alias RsaSigningKeyPair =
+    { publicKey : RsaSigningPublicKey
+    , privateKey : RsaSigningPrivateKey
+    }
+
+
+{-| RSA signing public key (for verification). Opaque type wrapping a CryptoKey. -}
+type RsaSigningPublicKey
+    = RsaSigningPublicKey
+
+
+{-| RSA signing private key (for signing). Opaque type wrapping a CryptoKey. -}
+type RsaSigningPrivateKey
+    = RsaSigningPrivateKey
+
+
+{-| RSA signing algorithms. -}
+type RsaSignAlgorithm
+    = RsaPss
+    | RsaPkcs1
+
+
+{-| Generate an ECDSA key pair for the given curve.
+
+    Crypto.Sign.generateEcdsaKeyPair P256
+-}
+generateEcdsaKeyPair : EcCurve -> Task Error EcdsaKeyPair
+generateEcdsaKeyPair =
+    CryptoFFI.generateEcdsaKeyPair
+
+
+{-| Generate an RSA signing key pair.
+
+    Crypto.Sign.generateRsaSigningKeyPair RsaPss Rsa2048 SHA256
+-}
+generateRsaSigningKeyPair : RsaSignAlgorithm -> RsaKeyLength -> HashAlgorithm -> Task Error RsaSigningKeyPair
+generateRsaSigningKeyPair =
+    CryptoFFI.generateRsaSigningKeyPair
+
+
+{-| Sign data with an ECDSA private key. Returns the signature as raw bytes.
+
+    Crypto.Sign.signEcdsa ecdsaPrivateKey SHA256 dataBytes
+-}
+signEcdsa : EcdsaPrivateKey -> HashAlgorithm -> Bytes -> Task Error Bytes
+signEcdsa =
+    CryptoFFI.signEcdsa
+
+
+{-| Verify an ECDSA signature.
+
+    Crypto.Sign.verifyEcdsa ecdsaPublicKey SHA256 dataBytes signatureBytes
+-}
+verifyEcdsa : EcdsaPublicKey -> HashAlgorithm -> Bytes -> Bytes -> Task Error Bool
+verifyEcdsa =
+    CryptoFFI.verifyEcdsa
+
+
+{-| Sign data with an RSA-PSS private key.
+The Int is the salt length in bytes. -}
+signRsaPss : RsaSigningPrivateKey -> Int -> Bytes -> Task Error Bytes
+signRsaPss =
+    CryptoFFI.signRsaPss
+
+
+{-| Verify an RSA-PSS signature. -}
+verifyRsaPss : RsaSigningPublicKey -> Int -> Bytes -> Bytes -> Task Error Bool
+verifyRsaPss =
+    CryptoFFI.verifyRsaPss
+
+
+{-| Sign data with an RSASSA-PKCS1-v1_5 private key. -}
+signRsaPkcs1 : RsaSigningPrivateKey -> Bytes -> Task Error Bytes
+signRsaPkcs1 =
+    CryptoFFI.signRsaPkcs1
+
+
+{-| Verify an RSASSA-PKCS1-v1_5 signature. -}
+verifyRsaPkcs1 : RsaSigningPublicKey -> Bytes -> Bytes -> Task Error Bool
+verifyRsaPkcs1 =
+    CryptoFFI.verifyRsaPkcs1
+
+
+{-| Sign a UTF-8 string with ECDSA.
+
+    Crypto.Sign.signString ecdsaPrivateKey SHA256 "hello"
+-}
+signString : EcdsaPrivateKey -> HashAlgorithm -> String -> Task Error Bytes
+signString key algo str =
+    signEcdsa key algo (CryptoFFI.stringToBytes str)
+
+
+{-| Verify an ECDSA signature against a UTF-8 string.
+
+    Crypto.Sign.verifyString ecdsaPublicKey SHA256 "hello" sigBytes
+-}
+verifyString : EcdsaPublicKey -> HashAlgorithm -> String -> Bytes -> Task Error Bool
+verifyString key algo str sig =
+    verifyEcdsa key algo (CryptoFFI.stringToBytes str) sig
+
+
+{-| Convert an EC curve to its human-readable name.
+
+    ecCurveToString P256 == "P-256"
+-}
+ecCurveToString : EcCurve -> String
+ecCurveToString curve =
+    case curve of
+        P256 ->
+            "P-256"
+
+        P384 ->
+            "P-384"
+
+        P521 ->
+            "P-521"
+
+
+{-| Convert an RSA signing algorithm to its human-readable name.
+
+    rsaSignAlgorithmToString RsaPss == "RSA-PSS"
+-}
+rsaSignAlgorithmToString : RsaSignAlgorithm -> String
+rsaSignAlgorithmToString algo =
+    case algo of
+        RsaPss ->
+            "RSA-PSS"
+
+        RsaPkcs1 ->
+            "RSASSA-PKCS1-v1_5"

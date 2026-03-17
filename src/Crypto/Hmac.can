@@ -1,0 +1,102 @@
+module Crypto.Hmac exposing
+    ( HmacKey
+    , generateKey
+    , importKey
+    , importKeyString
+    , exportKey
+    , sign
+    , signString
+    , signHex
+    , verify
+    )
+
+
+{-| HMAC message authentication codes using the Web Crypto API.
+
+HMAC provides data integrity and authenticity verification using a
+shared secret key. This module supports all SHA-family hash algorithms.
+
+# Keys
+@docs HmacKey, generateKey, importKey, importKeyString, exportKey
+
+# Sign
+@docs sign, signString, signHex
+
+# Verify
+@docs verify
+-}
+
+
+import Bytes exposing (Bytes)
+import Crypto exposing (Error)
+import Crypto.Hash exposing (HashAlgorithm)
+import Task exposing (Task)
+
+foreign import javascript "external/crypto.js" as CryptoFFI
+
+
+{-| HMAC key type wrapping an opaque CryptoKey for HMAC operations. -}
+type HmacKey
+    = HmacKey
+
+
+{-| Generate a new HMAC key for the given hash algorithm.
+
+    Crypto.Hmac.generateKey Crypto.Hash.SHA256
+-}
+generateKey : HashAlgorithm -> Task Error HmacKey
+generateKey =
+    CryptoFFI.hmacGenerateKey
+
+
+{-| Import an HMAC key from raw bytes.
+
+    Crypto.Hmac.importKey Crypto.Hash.SHA256 secretBytes
+-}
+importKey : HashAlgorithm -> Bytes -> Task Error HmacKey
+importKey =
+    CryptoFFI.hmacImportKey
+
+
+{-| Import an HMAC key from a UTF-8 string (e.g., a shared secret). -}
+importKeyString : HashAlgorithm -> String -> Task Error HmacKey
+importKeyString algo str =
+    CryptoFFI.hmacImportKey algo (CryptoFFI.stringToBytes str)
+
+
+{-| Export an HMAC key to raw bytes. -}
+exportKey : HmacKey -> Task Error Bytes
+exportKey =
+    CryptoFFI.hmacExportKey
+
+
+{-| Compute the HMAC signature of data. Returns the MAC as raw bytes.
+
+    Crypto.Hmac.sign hmacKey messageBytes
+-}
+sign : HmacKey -> Bytes -> Task Error Bytes
+sign =
+    CryptoFFI.hmacSign
+
+
+{-| Compute the HMAC of a UTF-8 string. -}
+signString : HmacKey -> String -> Task Error Bytes
+signString key str =
+    CryptoFFI.hmacSign key (CryptoFFI.stringToBytes str)
+
+
+{-| Compute the HMAC and return it as a hex string. -}
+signHex : HmacKey -> Bytes -> Task Error String
+signHex key bytes =
+    sign key bytes
+        |> Task.map CryptoFFI.bytesToHex
+
+
+{-| Verify an HMAC signature.
+Returns True if the signature is valid.
+
+    Crypto.Hmac.verify hmacKey messageBytes signatureBytes
+-}
+verify : HmacKey -> Bytes -> Bytes -> Task Error Bool
+verify =
+    CryptoFFI.hmacVerify

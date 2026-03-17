@@ -1,0 +1,102 @@
+module Crypto.Hash exposing
+    ( HashAlgorithm(..)
+    , digest
+    , digestString
+    , digestHex
+    , digestStringHex
+    , hashAlgorithmToString
+    )
+
+
+{-| SHA-family hash functions using the Web Crypto API.
+
+Supports SHA-1 (legacy only), SHA-256, SHA-384, and SHA-512.
+All operations return Tasks because the Web Crypto digest API is
+Promise-based.
+
+# Algorithms
+@docs HashAlgorithm, hashAlgorithmToString
+
+# Digest
+@docs digest, digestString, digestHex, digestStringHex
+-}
+
+
+import Bytes exposing (Bytes)
+import Crypto exposing (Error)
+import Task exposing (Task)
+
+foreign import javascript "external/crypto.js" as CryptoFFI
+
+
+{-| Hash algorithms supported by Web Crypto.
+
+SHA-1 is included for legacy protocol compatibility but should not be
+used for new applications because it is vulnerable to collision attacks.
+-}
+type HashAlgorithm
+    = SHA1
+    | SHA256
+    | SHA384
+    | SHA512
+
+
+{-| Compute the hash (digest) of bytes using the specified algorithm.
+Returns the hash as raw bytes.
+
+    Crypto.Hash.digest SHA256 myBytes
+-}
+digest : HashAlgorithm -> Bytes -> Task Error Bytes
+digest =
+    CryptoFFI.digest
+
+
+{-| Compute the hash of a UTF-8 string.
+Convenience wrapper that encodes the string to UTF-8 bytes, then hashes.
+
+    Crypto.Hash.digestString SHA256 "hello world"
+-}
+digestString : HashAlgorithm -> String -> Task Error Bytes
+digestString algo str =
+    CryptoFFI.digest algo (CryptoFFI.stringToBytes str)
+
+
+{-| Compute the hash and return it as a hexadecimal string.
+
+    Crypto.Hash.digestHex SHA256 myBytes
+-}
+digestHex : HashAlgorithm -> Bytes -> Task Error String
+digestHex algo bytes =
+    digest algo bytes
+        |> Task.map CryptoFFI.bytesToHex
+
+
+{-| Compute the hash of a string and return it as a hexadecimal string.
+
+    Crypto.Hash.digestStringHex SHA256 "hello world"
+    -- Task.succeed "b94d27b9934d3e08..."
+-}
+digestStringHex : HashAlgorithm -> String -> Task Error String
+digestStringHex algo str =
+    digestString algo str
+        |> Task.map CryptoFFI.bytesToHex
+
+
+{-| Convert a hash algorithm to its human-readable name.
+
+    hashAlgorithmToString SHA256 == "SHA-256"
+-}
+hashAlgorithmToString : HashAlgorithm -> String
+hashAlgorithmToString algo =
+    case algo of
+        SHA1 ->
+            "SHA-1"
+
+        SHA256 ->
+            "SHA-256"
+
+        SHA384 ->
+            "SHA-384"
+
+        SHA512 ->
+            "SHA-512"
