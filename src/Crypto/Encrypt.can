@@ -189,13 +189,30 @@ decryptAesGcm =
     CryptoFFI.decryptAesGcm
 
 
-{-| Encrypt data with AES-CBC. Automatically generates a random 16-byte IV. -}
+{-| Encrypt data with AES-CBC.
+
+WARNING: AES-CBC provides **no authentication**. An attacker who can submit
+chosen ciphertexts can exploit the CBC padding scheme to decrypt data without
+knowing the key (padding oracle attack). Do not use AES-CBC for new
+applications. Use `encryptAesGcm` instead, which provides authenticated
+encryption (AEAD) and is immune to padding oracle attacks.
+
+AES-CBC is included only for interoperability with legacy systems that require
+it. If you control both endpoints, migrate to AES-GCM.
+
+Automatically generates a random 16-byte IV.
+-}
 encryptAesCbc : AesKey -> Bytes -> Task Error EncryptedData
 encryptAesCbc =
     CryptoFFI.encryptAesCbc
 
 
-{-| Decrypt data with AES-CBC. -}
+{-| Decrypt data with AES-CBC.
+
+WARNING: AES-CBC provides **no authentication**. See `encryptAesCbc` for a
+full explanation of the padding oracle risk. Prefer `decryptAesGcm` for new
+applications.
+-}
 decryptAesCbc : AesKey -> EncryptedData -> Task Error Bytes
 decryptAesCbc =
     CryptoFFI.decryptAesCbc

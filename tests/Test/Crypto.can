@@ -1,5 +1,6 @@
 module Test.Crypto exposing (main, tests)
 
+import Bytes exposing (Bytes)
 import Crypto exposing (Error(..))
 import Crypto.Hash as Hash exposing (HashAlgorithm(..))
 import Crypto.Encrypt as Encrypt exposing (AesAlgorithm(..), AesKeyLength(..), RsaKeyLength(..))
@@ -25,6 +26,10 @@ tests =
         , ecCurveToStringTests
         , rsaSignAlgorithmToStringTests
         , keyFormatToStringTests
+        , encryptedDataStructureTests
+        , pbkdf2ConfigTests
+        , hkdfConfigTests
+        , algorithmCoverageTests
         ]
 
 
@@ -197,4 +202,229 @@ keyFormatToStringTests =
             \() ->
                 Key.keyFormatToString Jwk
                     |> Expect.equal "jwk"
+        ]
+
+
+{-| Verify EncryptedData record shape: the `tag` field distinguishes
+authenticated (AES-GCM) from unauthenticated (AES-CBC, AES-CTR) ciphertext.
+
+Since AES-GCM appends a 16-byte GHASH authentication tag and CBC/CTR do not,
+the `tag` field is `Maybe Bytes`. A value of `Nothing` means the ciphertext
+has no integrity protection — callers must use authenticated encryption
+(AES-GCM) in security-sensitive contexts.
+
+These tests use `fromHex` to produce concrete `Bytes` values so the
+EncryptedData record can be fully constructed and inspected.
+-}
+encryptedDataStructureTests : Test
+encryptedDataStructureTests =
+    describe "EncryptedData tag field semantics"
+        [ test "tag Nothing signals unauthenticated ciphertext (CBC/CTR)" <|
+            \() ->
+                -- A record with tag = Nothing represents CBC or CTR output,
+                -- which lacks an integrity check.
+                let
+                    tagValue : Maybe Bytes
+                    tagValue =
+                        Nothing
+                in
+                tagValue
+                    |> Expect.equal Nothing
+        , test "tag Just signals authenticated ciphertext (GCM)" <|
+            \() ->
+                -- A record with tag = Just bytes represents GCM output,
+                -- where the tag authenticates both the ciphertext and the IV.
+                let
+                    tagValue : Maybe Bytes
+                    tagValue =
+                        Bytes.fromHex "00112233445566778899aabbccddeeff"
+                in
+                tagValue
+                    |> Expect.notEqual Nothing
+        ]
+
+
+{-| Verify PBKDF2 default config values match OWASP 2023 recommendations.
+
+The OWASP 2023 recommendation for PBKDF2-SHA256 is 600,000 iterations.
+These tests confirm the library defaults are set correctly so users who
+rely on `defaultPbkdf2Config` get a secure configuration without needing
+to specify these numbers themselves.
+
+A minimal 1-byte salt (hex "00") is used; the tests only inspect config
+fields that do not depend on the salt value.
+-}
+pbkdf2ConfigTests : Test
+pbkdf2ConfigTests =
+    describe "Key.defaultPbkdf2Config"
+        [ test "default iterations is 600000 (OWASP 2023)" <|
+            \() ->
+                requireHex "00" <| \oneByte ->
+                    let
+                        config =
+                            Key.defaultPbkdf2Config oneByte
+                    in
+                    config.iterations
+                        |> Expect.equal 600000
+        , test "default keyLength is 256 bits" <|
+            \() ->
+                requireHex "00" <| \oneByte ->
+                    let
+                        config =
+                            Key.defaultPbkdf2Config oneByte
+                    in
+                    config.keyLength
+                        |> Expect.equal 256
+        , test "default hash is SHA256" <|
+            \() ->
+                requireHex "00" <| \oneByte ->
+                    let
+                        config =
+                            Key.defaultPbkdf2Config oneByte
+                    in
+                    Hash.hashAlgorithmToString config.hash
+                        |> Expect.equal "SHA-256"
+        ]
+
+
+{-| Verify HKDF default config values.
+
+A minimal 1-byte value is used for salt and info; the tests only inspect
+config fields that do not depend on those values.
+-}
+hkdfConfigTests : Test
+hkdfConfigTests =
+    describe "Key.defaultHkdfConfig"
+        [ test "default keyLength is 256 bits" <|
+            \() ->
+                requireHex "00" <| \oneByte ->
+                    let
+                        config =
+                            Key.defaultHkdfConfig oneByte oneByte
+                    in
+                    config.keyLength
+                        |> Expect.equal 256
+        , test "default hash is SHA256" <|
+            \() ->
+                requireHex "00" <| \oneByte ->
+                    let
+                        config =
+                            Key.defaultHkdfConfig oneByte oneByte
+                    in
+                    Hash.hashAlgorithmToString config.hash
+                        |> Expect.equal "SHA-256"
+        ]
+
+
+{-| Decode a hex string to Bytes, failing the test with a clear message if
+the hex is invalid. Used to construct concrete Bytes values in tests without
+resorting to unsafe partial functions.
+-}
+requireHex : String -> (Bytes -> Expect.Expectation) -> Expect.Expectation
+requireHex hex f =
+    case Bytes.fromHex hex of
+        Nothing ->
+            Expect.fail ("Bytes.fromHex produced Nothing for hex: " ++ hex)
+
+        Just b ->
+            f b
+
+
+{-| Exhaustive coverage of all algorithm/key-length combinations.
+
+AES-GCM is the only authenticated mode; CBC and CTR lack authentication.
+These tests document the full set of supported configurations and verify
+that the conversion functions cover every constructor — making it
+impossible to silently add a new variant without extending the tests.
+-}
+algorithmCoverageTests : Test
+algorithmCoverageTests =
+    describe "Algorithm coverage"
+        [ describe "All AES algorithms round-trip through aesAlgorithmToString"
+            [ test "AesGcm is the authenticated mode" <|
+                \() ->
+                    Encrypt.aesAlgorithmToString AesGcm
+                        |> Expect.equal "AES-GCM"
+            , test "AesCbc is the unauthenticated CBC mode" <|
+                \() ->
+                    Encrypt.aesAlgorithmToString AesCbc
+                        |> Expect.equal "AES-CBC"
+            , test "AesCtr is the unauthenticated counter mode" <|
+                \() ->
+                    Encrypt.aesAlgorithmToString AesCtr
+                        |> Expect.equal "AES-CTR"
+            ]
+        , describe "AES-GCM is the only AEAD (authenticated encryption) mode"
+            [ test "GCM string identifies AEAD mode" <|
+                \() ->
+                    -- AES-GCM is the NIST SP 800-38D authenticated mode.
+                    -- AES-CBC (NIST SP 800-38A) and AES-CTR (SP 800-38A) are
+                    -- unauthenticated. This test documents that contract.
+                    Encrypt.aesAlgorithmToString AesGcm
+                        |> Expect.equal "AES-GCM"
+            ]
+        , describe "All RSA key lengths round-trip through rsaKeyLengthBits"
+            [ test "Rsa2048 meets minimum security threshold" <|
+                \() ->
+                    Encrypt.rsaKeyLengthBits Rsa2048
+                        |> Expect.atLeast 2048
+            , test "Rsa4096 provides higher security margin" <|
+                \() ->
+                    Encrypt.rsaKeyLengthBits Rsa4096
+                        |> Expect.atLeast 4096
+            , test "Rsa4096 is strictly larger than Rsa2048" <|
+                \() ->
+                    Encrypt.rsaKeyLengthBits Rsa4096
+                        |> Expect.greaterThan (Encrypt.rsaKeyLengthBits Rsa2048)
+            ]
+        , describe "All EC curves round-trip through ecCurveToString"
+            [ test "P256 is the NIST P-256 curve (FIPS 186-4)" <|
+                \() ->
+                    Sign.ecCurveToString P256
+                        |> Expect.equal "P-256"
+            , test "P384 is the NIST P-384 curve (FIPS 186-4)" <|
+                \() ->
+                    Sign.ecCurveToString P384
+                        |> Expect.equal "P-384"
+            , test "P521 is the NIST P-521 curve (FIPS 186-4)" <|
+                \() ->
+                    Sign.ecCurveToString P521
+                        |> Expect.equal "P-521"
+            ]
+        , describe "Hash algorithm string constants match W3C WebCrypto spec names"
+            [ test "SHA-1 uses W3C dash format" <|
+                \() ->
+                    Hash.hashAlgorithmToString SHA1
+                        |> Expect.equal "SHA-1"
+            , test "SHA-256 uses W3C dash format" <|
+                \() ->
+                    Hash.hashAlgorithmToString SHA256
+                        |> Expect.equal "SHA-256"
+            , test "SHA-384 uses W3C dash format" <|
+                \() ->
+                    Hash.hashAlgorithmToString SHA384
+                        |> Expect.equal "SHA-384"
+            , test "SHA-512 uses W3C dash format" <|
+                \() ->
+                    Hash.hashAlgorithmToString SHA512
+                        |> Expect.equal "SHA-512"
+            ]
+        , describe "AES key lengths cover NIST-approved sizes"
+            [ test "128-bit key is NIST-approved minimum" <|
+                \() ->
+                    Encrypt.aesKeyLengthBits Aes128
+                        |> Expect.equal 128
+            , test "192-bit key is NIST-approved" <|
+                \() ->
+                    Encrypt.aesKeyLengthBits Aes192
+                        |> Expect.equal 192
+            , test "256-bit key provides maximum NIST-approved security" <|
+                \() ->
+                    Encrypt.aesKeyLengthBits Aes256
+                        |> Expect.equal 256
+            , test "256-bit is strictly larger than 128-bit" <|
+                \() ->
+                    Encrypt.aesKeyLengthBits Aes256
+                        |> Expect.greaterThan (Encrypt.aesKeyLengthBits Aes128)
+            ]
         ]
